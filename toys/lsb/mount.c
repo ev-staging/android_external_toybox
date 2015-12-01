@@ -334,7 +334,6 @@ void mount_main(void)
 
     for (mm = remount ? remount : mtl; mm; mm = (remount ? mm->prev : mm->next))
     {
-      char *aopts = 0;
       struct mtab_list *mmm = 0;
       int aflags, noauto, len;
 
@@ -366,6 +365,7 @@ void mount_main(void)
  
       // user only counts from fstab, not opts.
       if (!mmm) {
+        char *aopts = 0;
         TT.okuser = comma_scan(mm->opts, "user", 1);
         aflags = flag_opts(mm->opts, flags, &aopts);
         aflags = flag_opts(opts, aflags, &aopts);
@@ -376,8 +376,9 @@ void mount_main(void)
             aopts = NULL;
         }
         mount_filesystem(mm->device, mm->dir, mm->type, aflags, aopts);
+        free(aopts);
+        if (!remount && errno == EINVAL) continue;
       } // TODO else if (getuid()) error_msg("already there") ?
-      free(aopts);
 
       if (!FLAG(a)) break;
     }
