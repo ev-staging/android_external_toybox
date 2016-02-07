@@ -12,6 +12,7 @@ config LS
   default y
   help
     usage: ls [-ACFHLRSZacdfhiklmnpqrstux1] [directory...]
+
     list files
 
     what to show:
@@ -191,7 +192,7 @@ static int filter(struct dirtree *new)
       // fchmodat(), mknodat(), readlinkat() so we could do this without
       // even O_PATH? But no, this is 1990's tech.)
       int fd = openat(dirtree_parentfd(new), new->name,
-        O_PATH|(O_NOFOLLOW*!!(toys.optflags&FLAG_L)));
+        O_PATH|(O_NOFOLLOW*!(toys.optflags&FLAG_L)));
 
       if (fd != -1) {
         if (-1 == lsm_fget_context(fd, (char **)&new->extra) && errno == EBADF)
@@ -292,12 +293,13 @@ static void listfiles(int dirfd, struct dirtree *indir)
 
   if (-1 == dirfd) {
     strwidth(indir->name);
-    perror_msg("%s", indir->name);
+    perror_msg_raw(indir->name);
 
     return;
   }
 
   memset(totals, 0, sizeof(totals));
+  if (CFG_TOYBOX_ON_ANDROID || CFG_TOYBOX_DEBUG) memset(len, 0, sizeof(len));
 
   // Top level directory was already populated by main()
   if (!indir->parent) {
@@ -317,7 +319,7 @@ static void listfiles(int dirfd, struct dirtree *indir)
   } else {
     // Read directory contents. We dup() the fd because this will close it.
     // This reads/saves contents to display later, except for in "ls -1f" mode.
-    indir->data = dup(dirfd);
+    indir->dirfd = dup(dirfd);
     dirtree_recurse(indir, filter, DIRTREE_SYMFOLLOW*!!(flags&FLAG_L));
   }
 
@@ -526,7 +528,7 @@ void ls_main(void)
 
   // Do we have an implied -1
   if (!isatty(1)) {
-    toys.optflags |= FLAG_1;
+    if (!(toys.optflags & FLAG_m)) toys.optflags |= FLAG_1;
     if (TT.color) toys.optflags ^= FLAG_color;
   } else if (toys.optflags&(FLAG_l|FLAG_o|FLAG_n|FLAG_g))
     toys.optflags |= FLAG_1;
@@ -539,6 +541,7 @@ void ls_main(void)
   // Iterate through command line arguments, collecting directories and files.
   // Non-absolute paths are relative to current directory.
   TT.files = dirtree_start(0, 0);
+  TT.files->dirfd = AT_FDCWD;
   for (s = *toys.optargs ? toys.optargs : noargs; *s; s++) {
     dt = dirtree_start(*s, !(toys.optflags&(FLAG_l|FLAG_d|FLAG_F)) ||
                             (toys.optflags&(FLAG_L|FLAG_H)));

@@ -93,7 +93,7 @@ then
   # for it.
 
   > generated/optlibs.dat
-  for i in util crypt m resolv selinux smack attr
+  for i in util crypt m resolv selinux smack attr rt
   do
     echo "int main(int argc, char *argv[]) {return 0;}" | \
     ${CROSS_COMPILE}${CC} $CFLAGS -xc - -o generated/libprobe -Wl,--as-needed -l$i > /dev/null 2>/dev/null &&
@@ -208,6 +208,19 @@ then
       sed -n 's/struct \(.*\)_data {/	struct \1_data \1;/p'
     echo "} this;"
   ) > generated/globals.h
+fi
+
+if [ generated/mktags -ot scripts/mktags.c ]
+then
+  do_loudly $HOSTCC scripts/mktags.c -o generated/mktags || exit 1
+fi
+
+if isnewer generated/tags.h toys
+then
+  echo -n "generated/tags.h "
+
+  sed -n '/TAGGED_ARRAY(/,/^)/{s/.*TAGGED_ARRAY[(]\([^,]*\),/\1/;p}' \
+    toys/*/*.c lib/*.c | generated/mktags > generated/tags.h
 fi
 
 echo "generated/help.h"

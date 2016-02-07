@@ -42,6 +42,7 @@ common_cflags  += -DTOYBOX_VERSION='"$(toybox_version)"'
 #  mm -j32
 #  # (Make any necessary Android.mk changes and test the new toybox.)
 #  repo upload .
+#  git push aosp HEAD:refs/for/master  # Push to gerrit for review.
 #  git push aosp HEAD:master  # Push directly, avoiding gerrit.
 #
 #  # Now commit any necessary Android.mk changes like normal:
@@ -69,6 +70,7 @@ LOCAL_SRC_FILES := \
     lib/help.c \
     lib/interestingtimes.c \
     lib/lib.c \
+    lib/linestack.c \
     lib/llist.c \
     lib/net.c \
     lib/password.c \
@@ -162,13 +164,11 @@ LOCAL_SRC_FILES := \
     toys/pending/lsof.c \
     toys/pending/more.c \
     toys/pending/netstat.c \
-    toys/pending/pgrep.c \
     toys/pending/resize.c \
     toys/pending/route.c \
     toys/pending/tar.c \
     toys/pending/telnet.c \
     toys/pending/test.c \
-    toys/pending/top.c \
     toys/pending/tr.c \
     toys/pending/traceroute.c \
     toys/pending/watch.c \
@@ -266,9 +266,9 @@ LOCAL_MODULE := toybox
 TOYBOX_INSTLIST := $(HOST_OUT_EXECUTABLES)/toybox-instlist
 LOCAL_ADDITIONAL_DEPENDENCIES := toybox_links
 
-# we still want a link for ps, but the toolbox version needs to
+# we still want a link for ls/ps, but the toolbox version needs to
 # stick around for compatibility reasons, for now.
-TOYS_FOR_XBIN := ps
+TOYS_FOR_XBIN := ls ps
 
 # skip links for these toys in the system image, they already have
 # a full-blown counterpart. we still want them for the recovery
@@ -299,4 +299,18 @@ LOCAL_CLANG := true
 LOCAL_MODULE := libtoybox_driver
 include $(BUILD_STATIC_LIBRARY)
 
-
+# static executable for use in limited environments
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := main.c
+LOCAL_CFLAGS := $(common_cflags)
+LOCAL_CXX_STL := none
+LOCAL_CLANG := true
+LOCAL_UNSTRIPPED_PATH := $(PRODUCT_OUT)/symbols/utilities
+LOCAL_MODULE := toybox_static
+LOCAL_MODULE_CLASS := UTILITY_EXECUTABLES
+LOCAL_MODULE_PATH := $(PRODUCT_OUT)/utilities
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_STEM := toybox
+LOCAL_STATIC_LIBRARIES := libc libtoybox libcutils libselinux libmincrypt
+LOCAL_FORCE_STATIC_EXECUTABLE := true
+include $(BUILD_EXECUTABLE)

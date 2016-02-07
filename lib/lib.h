@@ -3,6 +3,16 @@
  * Copyright 2006 Rob Landley <rob@landley.net>
  */
 
+struct ptr_len {
+  void *ptr;
+  long len;
+};
+
+struct str_len {
+  char *str;
+  long len;
+};
+
 // llist.c
 
 // All these list types can be handled by the same code because first element
@@ -22,11 +32,6 @@ struct arg_list {
 struct double_list {
   struct double_list *next, *prev;
   char *data;
-};
-
-struct ptr_len {
-  void *ptr;
-  long len;
 };
 
 void llist_free_arg(void *node);
@@ -67,7 +72,7 @@ struct dirtree {
   long extra; // place for user to store their stuff (can be pointer)
   struct stat st;
   char *symlink;
-  int data;  // dirfd for directory, linklen for symlink
+  int dirfd;
   char again;
   char name[];
 };
@@ -147,14 +152,18 @@ void verror_msg(char *msg, int err, va_list va);
 void error_msg(char *msg, ...) printf_format;
 void perror_msg(char *msg, ...) printf_format;
 void error_exit(char *msg, ...) printf_format noreturn;
-void help_exit(char *msg, ...) printf_format noreturn;
 void perror_exit(char *msg, ...) printf_format noreturn;
+void help_exit(char *msg, ...) printf_format noreturn;
+void error_msg_raw(char *msg);
+void perror_msg_raw(char *msg);
+void error_exit_raw(char *msg);
+void perror_exit_raw(char *msg);
 ssize_t readall(int fd, void *buf, size_t len);
 ssize_t writeall(int fd, void *buf, size_t len);
 off_t lskip(int fd, off_t offset);
 int mkpathat(int atfd, char *dir, mode_t lastmode, int flags);
 struct string_list **splitpath(char *path, struct string_list **list);
-char *readfileat(int dirfd, char *name, char *buf, off_t len);
+char *readfileat(int dirfd, char *name, char *buf, off_t *len);
 char *readfile(char *name, char *buf, off_t len);
 void msleep(long miliseconds);
 int64_t peek_le(void *ptr, unsigned size);
@@ -168,6 +177,7 @@ long atolx(char *c);
 long atolx_range(char *numstr, long low, long high);
 int stridx(char *haystack, char needle);
 char *strlower(char *s);
+char *strafter(char *haystack, char *needle);
 char *chomp(char *s);
 int unescape(char c);
 int strstart(char **a, char *b);
@@ -175,8 +185,6 @@ off_t fdlength(int fd);
 void loopfiles_rw(char **argv, int flags, int permissions, int failok,
   void (*function)(int fd, char *name));
 void loopfiles(char **argv, void (*function)(int fd, char *name));
-char *get_rawline(int fd, long *plen, char end);
-char *get_line(int fd);
 void xsendfile(int in, int out);
 int wfchmodat(int rc, char *name, mode_t mode);
 int copy_tempfile(int fdin, char *name, char **tempname);
@@ -186,39 +194,52 @@ void crc_init(unsigned int *crc_table, int little_endian);
 void base64_init(char *p);
 int yesno(int def);
 int qstrcmp(const void *a, const void *b);
-int xpoll(struct pollfd *fds, int nfds, int timeout);
+void create_uuid(char *uuid);
+char *show_uuid(char *uuid);
 
 #define HR_SPACE 1 // Space between number and units
 #define HR_B     2 // Use "B" for single byte units
 #define HR_1000  4 // Use decimal instead of binary units
 int human_readable(char *buf, unsigned long long num, int style);
 
+// linestack.c
+
+struct linestack {
+  long len, max;
+  struct ptr_len idx[];
+};
+
+void linestack_addstack(struct linestack **lls, struct linestack *throw,
+  long pos);
+void linestack_insert(struct linestack **lls, long pos, char *line, long len);
+void linestack_append(struct linestack **lls, char *line);
+struct linestack *linestack_load(char *name);
+int crunch_str(char **str, int width, FILE *out,
+  int (*escout)(FILE *out, int cols, char **buf));
+int draw_str(char *start, int width);
+int utf8len(char *str);
+int utf8skip(char *str, int width);
+int draw_trim(char *str, int padto, int width);
+
 // interestingtimes.c
 int xgettty(void);
 int terminal_size(unsigned *xx, unsigned *yy);
+int terminal_probesize(unsigned *xx, unsigned *yy);
+int scan_key_getsize(char *scratch, int miliwait, unsigned *xx, unsigned *yy);
 int set_terminal(int fd, int raw, struct termios *old);
-int scan_key(char *scratch, int block);
+void xset_terminal(int fd, int raw, struct termios *old);
+int scan_key(char *scratch, int miliwait);
 void tty_esc(char *s);
 void tty_jump(int x, int y);
 void tty_reset(void);
 void tty_sigreset(int i);
-
-// Results from scan_key()
-#define KEY_UP 256
-#define KEY_DOWN 257
-#define KEY_RIGHT 258
-#define KEY_LEFT 259
-#define KEY_PGUP 260
-#define KEY_PGDN 261
-#define KEY_HOME 262
-#define KEY_END  263
-#define KEY_INSERT 264
 
 // net.c
 int xsocket(int domain, int type, int protocol);
 void xsetsockopt(int fd, int level, int opt, void *val, socklen_t len);
 int xconnect(char *host, char *port, int family, int socktype, int protocol,
   int flags);
+int xpoll(struct pollfd *fds, int nfds, int timeout);
 
 // password.c
 int get_salt(char *salt, char * algo);
@@ -234,6 +255,8 @@ struct mtab_list {
   char type[0];
 };
 
+void comma_args(struct arg_list *al, void *data, char *err,
+  char *(*callback)(void *data, char *str, int len));
 void comma_collate(char **old, char *new);
 char *comma_iterate(char **list, int *len);
 int comma_scan(char *optlist, char *opt, int clean);
@@ -263,15 +286,18 @@ void names_to_pid(char **names, int (*callback)(pid_t pid, char *name));
 pid_t xvforkwrap(pid_t pid);
 #define XVFORK() xvforkwrap(vfork())
 
-#define WOULD_EXIT(y, x) { jmp_buf _noexit; \
+// Wrapper to make xfuncs() return (via longjmp) instead of exiting.
+// Assigns true/false "did it exit" value to first argument.
+#define WOULD_EXIT(y, x) do { jmp_buf _noexit; \
   int _noexit_res; \
   toys.rebound = &_noexit; \
   _noexit_res = setjmp(_noexit); \
   if (!_noexit_res) do {x;} while(0); \
   toys.rebound = 0; \
   y = _noexit_res; \
-}
+} while(0);
 
+// Wrapper that discards true/false "did it exit" value.
 #define NOEXIT(x) WOULD_EXIT(_noexit_res, x)
 
 // Functions in need of further review/cleanup
