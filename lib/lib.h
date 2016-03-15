@@ -101,6 +101,7 @@ void *xzalloc(size_t size);
 void *xrealloc(void *ptr, size_t size);
 char *xstrndup(char *s, size_t n);
 char *xstrdup(char *s);
+void *xmemdup(void *s, long len);
 char *xmprintf(char *format, ...) printf_format;
 void xprintf(char *format, ...) printf_format;
 void xputs(char *s);
@@ -118,6 +119,7 @@ void xaccess(char *path, int flags);
 void xunlink(char *path);
 int xcreate(char *path, int flags, int mode);
 int xopen(char *path, int flags);
+void xpipe(int *pp);
 void xclose(int fd);
 int xdup(int fd);
 FILE *xfdopen(int fd, char *mode);
@@ -196,6 +198,11 @@ int yesno(int def);
 int qstrcmp(const void *a, const void *b);
 void create_uuid(char *uuid);
 char *show_uuid(char *uuid);
+char *next_printf(char *s, char **start);
+char *strnstr(char *line, char *str);
+int dev_minor(int dev);
+int dev_major(int dev);
+int dev_makedev(int major, int minor);
 
 #define HR_SPACE 1 // Space between number and units
 #define HR_B     2 // Use "B" for single byte units

@@ -71,6 +71,7 @@
 
 #include "lib/lib.h"
 #include "lib/lsm.h"
+#include "lib/toyflags.h"
 #include "toys/e2fs.h"
 
 // Get list of function prototypes for all enabled command_main() functions.
@@ -87,28 +88,6 @@
 struct toy_list *toy_find(char *name);
 void toy_init(struct toy_list *which, char *argv[]);
 void toy_exec(char *argv[]);
-
-// Flags describing command behavior.
-
-#define TOYFLAG_USR      (1<<0)
-#define TOYFLAG_BIN      (1<<1)
-#define TOYFLAG_SBIN     (1<<2)
-#define TOYMASK_LOCATION ((1<<4)-1)
-
-// This is a shell built-in function, running in the same process context.
-#define TOYFLAG_NOFORK   (1<<4)
-
-// Start command with a umask of 0 (saves old umask in this.old_umask)
-#define TOYFLAG_UMASK    (1<<5)
-
-// This command runs as root.
-#define TOYFLAG_STAYROOT (1<<6)
-#define TOYFLAG_NEEDROOT (1<<7)
-#define TOYFLAG_ROOTONLY (TOYFLAG_STAYROOT|TOYFLAG_NEEDROOT)
-
-// Call setlocale to listen to environment variables.
-// This invalidates sprintf("%.*s", size, string) as a valid length constraint.
-#define TOYFLAG_LOCALE   (1<<8)
 
 // Array of available commands
 
@@ -129,13 +108,14 @@ extern struct toy_context {
   int exitval;             // Value error_exit feeds to exit()
   int optc;                // Count of optargs
   int old_umask;           // Old umask preserved by TOYFLAG_UMASK
-  int toycount;            // Total number of commands in this build
-  int signal;              // generic_signal() records what signal it saw here
+  short toycount;          // Total number of commands in this build
+  short signal;            // generic_signal() records what signal it saw here
   int signalfd;            // and writes signal to this fd, if set
+  int wasroot;             // dropped setuid
 
   // This is at the end so toy_init() doesn't zero it.
   jmp_buf *rebound;        // longjmp here instead of exit when do_rebound set
-  void *stacktop;          // nested toy_exec() call count, or -1 if vforked
+  void *stacktop;          // nested toy_exec() call count, or 0 if vforked
 } toys;
 
 // Two big temporary buffers: one for use by commands, one for library functions
